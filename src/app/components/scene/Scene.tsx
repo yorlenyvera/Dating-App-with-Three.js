@@ -1,19 +1,19 @@
 "use client";
 
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Suspense, useEffect, useState, useRef } from "react";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRM, VRMLoaderPlugin } from "@pixiv/three-vrm";
 import * as THREE from "three";
 
-// BATTLE-TESTED: Completely ignores keyboard events
-function ResizeHandler() {
+// NO RESIZE HANDLER - Scene stays completely static
+function StaticScene() {
   const { camera, gl } = useThree();
   const initialized = useRef(false);
 
   useEffect(() => {
-    // Initial setup only - ignore all future resize events
+    // Initial setup only - ignore ALL resize events
     if (!initialized.current) {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -27,9 +27,7 @@ function ResizeHandler() {
       initialized.current = true;
     }
 
-    // NO RESIZE EVENT LISTENER - This is the key!
-    // Three.js scene stays completely static
-
+    // NO EVENT LISTENERS - Scene never responds to resize
   }, [camera, gl]);
 
   return null;
@@ -61,6 +59,7 @@ function Avatar() {
     );
   }, []);
 
+  const { useFrame } = require('@react-three/fiber');
   useFrame((_, delta) => {
     vrm?.update(delta);
   });
@@ -108,12 +107,20 @@ function Lights() {
   );
 }
 
-// Add useFrame import and hook for Avatar
-const useFrame = (await import('@react-three/fiber')).useFrame;
-
 export default function Scene() {
   return (
-    <div className="fixed inset-0 z-0">
+    <div 
+      className="fixed inset-0 z-0"
+      style={{
+        // CRITICAL: Ensure no transforms can affect this container
+        transform: 'none !important',
+        position: 'fixed !important',
+        top: '0 !important',
+        left: '0 !important',
+        width: '100vw !important',
+        height: '100vh !important'
+      }}
+    >
       <Canvas
         camera={{ 
           position: [0, 1.6, 3], 
@@ -132,19 +139,19 @@ export default function Scene() {
           left: 0,
           width: '100vw',
           height: '100vh',
-          display: 'block'
+          display: 'block',
+          // CRITICAL: No transforms
+          transform: 'none !important'
         }}
-        gl={{
-          antialias: true,
-          alpha: false
-        }}
+        // Disable automatic resize handling
+        frameloop="demand"
       >
         <color attach="background" args={["#e0e0e0"]} />
         <Suspense fallback={null}>
           <Lights />
           <Avatar />
           <Floor />
-          <ResizeHandler />
+          <StaticScene />
         </Suspense>
         
         <OrbitControls 

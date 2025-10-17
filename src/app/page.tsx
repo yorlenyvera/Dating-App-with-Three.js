@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useState, useRef, useEffect } from "react";
 import Scene from "./components/scene/Scene";
-import { useKeyboardHandler } from "../hooks/usekeyboardHandler";
+import { useKeyboardHandler } from "../hooks/useKeyboardHandler";
 
 type ChatMessage = {
   id: string;
@@ -92,16 +92,18 @@ export default function Page() {
 
   return (
     <div className="fixed inset-0 bg-gray-900">
+      {/* SCENE - ABSOLUTELY NO TRANSFORMS */}
       <Scene />
 
-      {/* UI Layer */}
+      {/* UI LAYER - SEPARATE FROM SCENE */}
       <div className="fixed inset-0 pointer-events-none z-10">
         
-        {/* Messages Panel */}
+        {/* Messages Panel - ONLY THIS MOVES */}
         {showMessages && (
           <div 
-            className="absolute inset-0 flex flex-col pointer-events-auto"
+            className="absolute inset-0 flex flex-col pointer-events-auto bg-gradient-to-b from-black/80 via-black/40 to-transparent"
             style={{
+              // Only transform the messages panel, not the container
               transform: `translateY(-${keyboardHeight}px)`,
               transition: 'transform 0.3s ease-out',
               paddingTop: 'env(safe-area-inset-top, 0px)'
@@ -120,7 +122,13 @@ export default function Page() {
               </div>
               
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 messages-container pointer-events-auto">
+              <div 
+                className="flex-1 overflow-y-auto px-4 messages-container pointer-events-auto"
+                style={{
+                  // Add padding to ensure messages are visible above keyboard
+                  paddingBottom: isKeyboardOpen ? `${keyboardHeight + 20}px` : '0px'
+                }}
+              >
                 <div className="space-y-3 py-2">
                   {messages.map((msg) => (
                     <div key={msg.id} className="flex justify-end">
@@ -136,12 +144,14 @@ export default function Page() {
           </div>
         )}
 
-        {/* Input Area */}
+        {/* Input Area - ONLY THIS MOVES */}
         <div 
-          className="absolute bottom-0 left-0 right-0 pointer-events-auto safe-area-inset"
+          className="absolute bottom-0 left-0 right-0 pointer-events-auto"
           style={{
+            // Only transform the input area, not the container
             transform: `translateY(-${keyboardHeight}px)`,
-            transition: 'transform 0.3s ease-out'
+            transition: 'transform 0.3s ease-out',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)'
           }}
         >
           <div className="px-4 pb-4 bg-gradient-to-t from-black/50 to-transparent pt-6">

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* CRITICAL MOBILE FIXES - BATTLE TESTED */
+/* CRITICAL FIXES */
 html,
 body {
   margin: 0;
@@ -27,7 +27,7 @@ body {
   }
 }
 
-/* Three.js canvas - COMPLETELY IMMUNE TO KEYBOARD */
+/* THREE.JS CANVAS - COMPLETELY IMMUNE */
 canvas {
   display: block;
   position: fixed !important;
@@ -35,11 +35,23 @@ canvas {
   left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
+  /* CRITICAL: No transforms allowed */
   transform: none !important;
+  will-change: auto !important;
   touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* SCENE CONTAINER - NO TRANSFORMS */
+.fixed.inset-0.z-0 {
+  transform: none !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
 }
 
 /* Safe area support */
@@ -50,13 +62,13 @@ canvas {
   padding-top: env(safe-area-inset-top);
 }
 
-/* MOBILE INPUT FIXES - PREVENT ZOOM */
+/* MOBILE INPUT FIXES */
 textarea, input {
   -webkit-appearance: none;
   border-radius: 0;
-  font-size: 16px !important; /* CRITICAL: Prevent zoom on focus */
+  font-size: 16px !important;
   transform: translateZ(0);
-  min-height: 44px; /* Better touch targets */
+  min-height: 44px;
 }
 
 /* Remove tap highlights */
@@ -86,9 +98,4 @@ body {
 /* Smooth scrolling for iOS */
 .messages-container {
   -webkit-overflow-scrolling: touch;
-}
-
-/* Ensure fixed elements stay fixed */
-.fixed {
-  position: fixed !important;
 }
