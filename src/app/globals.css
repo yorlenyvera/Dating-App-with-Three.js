@@ -9,6 +9,8 @@ body {
   height: 100%;
   overflow: hidden;
   position: fixed;
+  /* Prevent elastic scrolling on iOS */
+  overscroll-behavior: none;
 }
 
 #root {
@@ -16,7 +18,31 @@ body {
   height: 100%;
 }
 
-/* Safe area support for mobile devices (notch/home indicator) */
+/* Critical: Prevent any viewport scaling on iOS */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Safe area support for mobile devices */
 .safe-area-inset {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Ensure Three.js canvas stays fixed and doesn't move */
+canvas {
+  display: block;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  transform: none !important;
+}
+
+/* Prevent any unwanted transitions on the scene */
+.fixed.inset-0 {
+  transform: none !important;
 }
