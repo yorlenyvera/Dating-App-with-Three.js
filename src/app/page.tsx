@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useState, useRef, useEffect } from "react";
 import Scene from "./components/scene/Scene";
 import { useKeyboardHandler } from "../hooks/usekeyboardHandler";
 
@@ -13,8 +13,30 @@ export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [showMessages, setShowMessages] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const { keyboardHeight, isKeyboardOpen, onInputFocus, onInputBlur } = useKeyboardHandler();
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ 
+        behavior: "smooth",
+        block: "end"
+      });
+    }, 100);
+  }, [messages, isKeyboardOpen]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 120);
+      textarea.style.height = newHeight + 'px';
+    }
+  }, [input]);
 
   const sendMessage = () => {
     if (!input.trim()) return;
@@ -24,6 +46,13 @@ export default function Page() {
       { id: Date.now().toString(), content: input.trim() },
     ]);
     setInput("");
+    
+    // Reset textarea
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = '48px';
+      }
+    }, 50);
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -41,87 +70,109 @@ export default function Page() {
   const handleTextareaFocus = () => {
     setShowMessages(true);
     onInputFocus();
+    
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ 
+        behavior: "smooth",
+        block: "end"
+      });
+    }, 350);
   };
 
   const handleTextareaBlur = () => {
     onInputBlur();
   };
 
+  const closeMessages = () => {
+    setShowMessages(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-900">
       <Scene />
 
-      {/* Overlay UI that moves with keyboard */}
-      <div 
-        className="fixed inset-0 flex flex-col items-center pt-4 pb-4 safe-area-inset pointer-events-none"
-        style={{
-          // Prevent any layout shifts by using fixed positioning
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0
-        }}
-      >
+      {/* UI Layer */}
+      <div className="fixed inset-0 pointer-events-none z-10">
         
+        {/* Messages Panel */}
         {showMessages && (
           <div 
-            className="w-full max-w-2xl flex-1 overflow-y-auto px-4 pointer-events-auto flex flex-col"
+            className="absolute inset-0 flex flex-col pointer-events-auto"
             style={{
-              // Add padding when keyboard is open to ensure messages are visible
-              paddingBottom: isKeyboardOpen ? `${keyboardHeight + 20}px` : '0px'
+              transform: `translateY(-${keyboardHeight}px)`,
+              transition: 'transform 0.3s ease-out',
+              paddingTop: 'env(safe-area-inset-top, 0px)'
             }}
           >
-            <div className="flex items-center justify-end py-3">
-              <button
-                onClick={() => setShowMessages(false)}
-                className="px-3 py-1 bg-gray-800 text-white/70 rounded text-sm"
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-6 pb-6 pt-6">
-              {messages.map((msg) => (
-                <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[95%] rounded-lg px-6 py-5 text-lg bg-blue-600 text-white">
-                    {msg.content}
-                  </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-end py-4 px-4">
+                <button
+                  onClick={closeMessages}
+                  className="px-4 py-2 bg-black/60 text-white/90 rounded-full text-sm backdrop-blur-lg border border-white/10 pointer-events-auto"
+                  style={{ minHeight: '44px' }}
+                >
+                  Close
+                </button>
+              </div>
+              
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-4 messages-container pointer-events-auto">
+                <div className="space-y-3 py-2">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className="flex justify-end">
+                      <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-blue-600 text-white text-[15px] leading-relaxed break-words shadow-xl">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} className="h-4" />
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         )}
 
-        
+        {/* Input Area */}
         <div 
-          className={`w-full max-w-2xl px-4 pointer-events-auto ${
-            showMessages ? "pt-2" : "mt-auto"
-          }`}
+          className="absolute bottom-0 left-0 right-0 pointer-events-auto safe-area-inset"
           style={{
-            // Move the input area up when keyboard opens
             transform: `translateY(-${keyboardHeight}px)`,
-            transition: 'transform 0.3s ease'
+            transition: 'transform 0.3s ease-out'
           }}
         >
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={handleTextareaFocus}
-              onBlur={handleTextareaBlur}
-              placeholder="Type a message..."
-              rows={1}
-              className="flex-1 bg-gray-800 text-white px-3 py-2 rounded resize-none focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim()}
-              className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
-            >
-              Send
-            </button>
-          </form>
+          <div className="px-4 pb-4 bg-gradient-to-t from-black/50 to-transparent pt-6">
+            <form onSubmit={handleSubmit} className="flex gap-3 items-end">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleTextareaFocus}
+                  onBlur={handleTextareaBlur}
+                  placeholder="Type a message..."
+                  rows={1}
+                  className="w-full bg-black/60 backdrop-blur-lg text-white px-4 py-3 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 border border-white/10 text-[16px] pointer-events-auto"
+                  style={{
+                    minHeight: '48px',
+                    maxHeight: '120px'
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex-shrink-0 shadow-xl pointer-events-auto"
+                style={{ minHeight: '48px' }}
+              >
+                Send
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

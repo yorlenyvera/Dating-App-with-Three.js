@@ -1,76 +1,127 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
-export const useKeyboardHandler = () => {
+interface KeyboardState {
+  keyboardHeight: number;
+  isKeyboardOpen: boolean;
+  onInputFocus: () => void;
+  onInputBlur: () => void;
+}
+
+export const useKeyboardHandler = (): KeyboardState => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  
+  const focusTimeRef = useRef<number>(0);
+  const originalHeightRef = useRef<number>(0);
+  const resizeTimeoutRef = useRef<any>(null);
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
+  // Platform detection
+  const isIOS = typeof window !== 'undefined' && 
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  const isAndroid = typeof window !== 'undefined' && /Android/.test(navigator.userAgent);
 
   const updateKeyboardState = useCallback((height: number) => {
+    const isOpening = height > 100;
     setKeyboardHeight(height);
-    setIsKeyboardOpen(height > 100);
+    setIsKeyboardOpen(isOpening);
   }, []);
 
-  // Handle iOS with Visual Viewport API
+  // Main resize handler - works for both iOS and Android
   useEffect(() => {
-    if (!isIOS || !window.visualViewport) return;
+    if (typeof window === 'undefined') return;
 
-    const visualViewport = window.visualViewport;
-    
-    const handleResize = () => {
-      const heightDiff = window.innerHeight - visualViewport.height;
-      updateKeyboardState(heightDiff);
-    };
-
-    visualViewport.addEventListener('resize', handleResize);
-    visualViewport.addEventListener('scroll', handleResize);
-
-    return () => {
-      visualViewport.removeEventListener('resize', handleResize);
-      visualViewport.removeEventListener('scroll', handleResize);
-    };
-  }, [isIOS, updateKeyboardState]);
-
-  // Handle Android with resize events
-  useEffect(() => {
-    if (!isAndroid) return;
-
-    let lastWindowHeight = window.innerHeight;
+    originalHeightRef.current = window.innerHeight;
 
     const handleResize = () => {
-      const currentHeight = window.innerHeight;
-      const heightDiff = lastWindowHeight - currentHeight;
-
-      // Keyboard opens (height decreases significantly)
-      if (heightDiff > 200) {
-        updateKeyboardState(heightDiff);
-      } 
-      // Keyboard closes (height increases significantly)
-      else if (heightDiff < -100 && keyboardHeight > 0) {
-        updateKeyboardState(0);
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
       }
 
-      lastWindowHeight = currentHeight;
+      resizeTimeoutRef.current = setTimeout(() => {
+        const currentHeight = window.innerHeight;
+        const heightDiff = originalHeightRef.current - currentHeight;
+
+        // Keyboard detection logic
+        const isLikelyKeyboard = heightDiff > 100 && 
+                                heightDiff < originalHeightRef.current * 0.7;
+
+        if (isLikelyKeyboard) {
+          // Keyboard opened
+          updateKeyboardState(heightDiff);
+          originalHeightRef.current = currentHeight;
+        } else if (currentHeight > originalHeightRef.current && keyboardHeight > 0) {
+          // Keyboard closed
+          updateKeyboardState(0);
+          originalHeightRef.current = currentHeight;
+        } else {
+          // Actual window resize
+          originalHeightRef.current = currentHeight;
+        }
+      }, isIOS ? 150 : 100);
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isAndroid, keyboardHeight, updateKeyboardState]);
+    // Visual Viewport API for modern browsers
+    const handleVisualViewport = () => {
+      if (!window.visualViewport) return;
+      
+      const visualViewport = window.visualViewport;
+      const heightDiff = window.innerHeight - visualViewport.height;
+      
+      if (heightDiff > 100) {
+        updateKeyboardState(heightDiff);
+      } else if (heightDiff < 50 && keyboardHeight > 0) {
+        updateKeyboardState(0);
+      }
+    };
 
-  // Handle focus/blur for fallback detection
-  const handleFocus = useCallback(() => {
-    if (keyboardHeight === 0) {
-      // Estimate keyboard height if not detected
-      updateKeyboardState(isIOS ? 300 : 280);
+    // Add event listeners
+    window.addEventListener('resize', handleResize);
+    
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleVisualViewport);
     }
-  }, [keyboardHeight, isIOS, updateKeyboardState]);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleVisualViewport);
+      }
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, [keyboardHeight, updateKeyboardState, isIOS]);
+
+  // Focus/blur handlers
+  const handleFocus = useCallback(() => {
+    focusTimeRef.current = Date.now();
+    
+    const delay = isIOS ? 400 : isAndroid ? 200 : 150;
+    
+    setTimeout(() => {
+      if (keyboardHeight === 0) {
+        const estimatedHeight = isIOS ? 336 : isAndroid ? 280 : 300;
+        updateKeyboardState(estimatedHeight);
+      }
+    }, delay);
+  }, [isIOS, isAndroid, keyboardHeight, updateKeyboardState]);
 
   const handleBlur = useCallback(() => {
+    const delay = isIOS ? 200 : 100;
+    
     setTimeout(() => {
-      updateKeyboardState(0);
-    }, 100);
-  }, [updateKeyboardState]);
+      const activeElement = document.activeElement;
+      const isTextInput = activeElement?.tagName === 'TEXTAREA' || 
+                         activeElement?.tagName === 'INPUT';
+      
+      if (!isTextInput) {
+        updateKeyboardState(0);
+      }
+    }, delay);
+  }, [isIOS, updateKeyboardState]);
 
   return {
     keyboardHeight,

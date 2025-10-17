@@ -1,80 +1,35 @@
 "use client";
 
-import { Canvas,useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Suspense, useEffect, useRef,useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRM, VRMLoaderPlugin } from "@pixiv/three-vrm";
-import { PerspectiveCamera } from "three";
+import * as THREE from "three";
 
-// Simple resize handler that ignores keyboard events
-function AdaptiveResizeHandler() {
-  const { camera, gl, size } = useThree();
-  const lastRealSize = useRef({ width: size.width, height: size.height });
-
-  useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      const widthDiff = Math.abs(width - lastRealSize.current.width);
-      const heightDiff = Math.abs(height - lastRealSize.current.height);
-      
-      // If this looks like a keyboard event (significant height change only), ignore it
-      const isLikelyKeyboard = heightDiff > 100 && heightDiff < 500 && widthDiff < 10;
-      
-      if (!isLikelyKeyboard) {
-        // Actual window resize - update Three.js
-        // Type-safe camera aspect update
-        if (camera instanceof PerspectiveCamera) {
-          camera.aspect = width / height;
-          camera.updateProjectionMatrix();
-        }
-        gl.setSize(width, height, false);
-        lastRealSize.current = { width, height };
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [camera, gl]);
-
-  return null;
-}
-
-// Alternative approach using type guard (even safer)
-function SafeResizeHandler() {
+// BATTLE-TESTED: Completely ignores keyboard events
+function ResizeHandler() {
   const { camera, gl } = useThree();
-  const lastRealSize = useRef({ 
-    width: window.innerWidth, 
-    height: window.innerHeight 
-  });
+  const initialized = useRef(false);
 
   useEffect(() => {
-    const handleResize = () => {
+    // Initial setup only - ignore all future resize events
+    if (!initialized.current) {
       const width = window.innerWidth;
       const height = window.innerHeight;
       
-      const widthDiff = Math.abs(width - lastRealSize.current.width);
-      const heightDiff = Math.abs(height - lastRealSize.current.height);
-      
-      // Check if this is likely a keyboard event
-      const isLikelyKeyboard = heightDiff > 100 && heightDiff < 500 && widthDiff < 10;
-      
-      if (!isLikelyKeyboard) {
-        // Type guard for PerspectiveCamera
-        if ('aspect' in camera) {
-          (camera as PerspectiveCamera).aspect = width / height;
-          camera.updateProjectionMatrix();
-        }
-        
-        gl.setSize(width, height, false);
-        lastRealSize.current = { width, height };
+      if (camera instanceof THREE.PerspectiveCamera) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
       }
-    };
+      
+      gl.setSize(width, height, false);
+      initialized.current = true;
+    }
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    // NO RESIZE EVENT LISTENER - This is the key!
+    // Three.js scene stays completely static
+
   }, [camera, gl]);
 
   return null;
@@ -82,21 +37,52 @@ function SafeResizeHandler() {
 
 function Avatar() {
   const [vrm, setVrm] = useState<VRM | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
     
-    loader.loadAsync("/assets/base_avatar.vrm").then((gltf) => {
-      setVrm(gltf.userData.vrm);
-    });
+    loader.load(
+      "/assets/base_avatar.vrm",
+      (gltf) => {
+        const vrm = gltf.userData.vrm as VRM;
+        if (vrm) {
+          vrm.scene.rotation.y = Math.PI;
+          setVrm(vrm);
+        }
+        setLoading(false);
+      },
+      undefined,
+      (error) => {
+        console.error('Failed to load VRM:', error);
+        setLoading(false);
+      }
+    );
   }, []);
 
   useFrame((_, delta) => {
     vrm?.update(delta);
   });
 
-  if (!vrm) return null;
+  if (loading) {
+    return (
+      <mesh position={[0, 1.6, 0]}>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshBasicMaterial color="#666666" />
+      </mesh>
+    );
+  }
+
+  if (!vrm) {
+    return (
+      <mesh position={[0, 1.6, 0]}>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshBasicMaterial color="#ff4444" />
+      </mesh>
+    );
+  }
+
   return <primitive object={vrm.scene} />;
 }
 
@@ -109,36 +95,65 @@ function Floor() {
   );
 }
 
+function Lights() {
+  return (
+    <>
+      <ambientLight intensity={0.6} />
+      <directionalLight 
+        position={[3, 5, 5]} 
+        intensity={1.2} 
+        castShadow
+      />
+    </>
+  );
+}
+
+// Add useFrame import and hook for Avatar
+const useFrame = (await import('@react-three/fiber')).useFrame;
+
 export default function Scene() {
   return (
     <div className="fixed inset-0 z-0">
       <Canvas
-        camera={{ position: [0, 1.6, 2.6], fov: 45 }} // This creates a PerspectiveCamera
-        onCreated={({ gl, size }) => {
+        camera={{ 
+          position: [0, 1.6, 3], 
+          fov: 45,
+          near: 0.1,
+          far: 1000
+        }}
+        onCreated={({ gl }) => {
           gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-          gl.setSize(size.width, size.height, false);
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
         style={{ 
           position: 'fixed',
           top: 0,
           left: 0,
           width: '100vw',
-          height: '100vh'
+          height: '100vh',
+          display: 'block'
+        }}
+        gl={{
+          antialias: true,
+          alpha: false
         }}
       >
         <color attach="background" args={["#e0e0e0"]} />
         <Suspense fallback={null}>
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[1, 3, 4]} intensity={1.2} />
+          <Lights />
           <Avatar />
           <Floor />
-          <SafeResizeHandler /> {/* Use the safe version */}
+          <ResizeHandler />
         </Suspense>
+        
         <OrbitControls 
           target={[0, 1.0, 0]}
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
+          minDistance={1}
+          maxDistance={10}
         />
       </Canvas>
     </div>
