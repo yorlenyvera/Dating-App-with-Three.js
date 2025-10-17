@@ -13,7 +13,7 @@ export const useKeyboardHandler = (): KeyboardState => {
   
   const focusTimeRef = useRef<number>(0);
   const originalHeightRef = useRef<number>(0);
-  const resizeTimeoutRef = useRef<any>(null);
+  const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Platform detection
   const isIOS = typeof window !== 'undefined' && 
